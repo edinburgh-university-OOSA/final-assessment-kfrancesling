@@ -10,7 +10,7 @@ A class to handle geotiffs
 from pyproj import Proj, transform # package for reprojecting data
 from osgeo import gdal             # package for handling geotiff data
 from osgeo import osr              # package for handling projection information
-from gdal import Warp
+from osgeo import gdal, osr
 import numpy as np
 
 
@@ -32,7 +32,7 @@ class tiffHandle():
 
   ########################################
 
-  def writeTiff(self,data,filename="chm.tif",epsg=27700):
+  def writeTiff(self,data, x, y, res, filename="chm.tif",epsg=27700):
     '''
     Write a geotiff from a raster layer
     '''

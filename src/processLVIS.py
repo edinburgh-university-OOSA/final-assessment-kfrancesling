@@ -58,9 +58,10 @@ class lvisGround(lvisData):
     # allocate space for ground elevation
     self.zG=np.full(self.nWaves,-999.9)  # no data flag for now
 
-    from sys import exit
-    print("CofG function not finished. Use online resources or week 4 code to finish")
-    exit()   # leave the program as this method is incomplete
+    # loop over waveforms
+    for i in range(0,self.nWaves):
+      if(np.sum(self.denoised[i])>0.0):   # avoid empty waveforms (clouds etc)
+        self.zG[i]=np.average(self.z[i],weights=self.denoised[i])  # centre of gravity
 
 
   #######################################################
