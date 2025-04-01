@@ -73,7 +73,7 @@ def merge_tifs(input_dir, output_tif):
         "height": mosaic.shape[1],
         "width": mosaic.shape[2],
         "transform": out_trans,
-        "compress": "LZW"
+        "compress": "LZW",
     })
 
     with rasterio.open(output_tif, "w", **out_meta) as dest:
@@ -81,49 +81,48 @@ def merge_tifs(input_dir, output_tif):
 
     print(f"Merged file saved as {output_tif}")
 
+def get_pine_island_bounds():
+    '''Define bounds for the Pine Island Glacier region'''
+    x0 = -102.00  # Min longitude
+    y0 = -75.4    # Min latitude
+    x1 = -99.00   # Max longitude
+    y1 = -74.6    # Max latitude
+    return x0, x1, y0, y1
+
 def getCmdArgs():
     '''Get command line arguments'''
     p = argparse.ArgumentParser(description=("Create DEM from LVIS data"))
     p.add_argument("filename", type=str, help="Path to the LVIS file")
     p.add_argument("resolution", type=float, help="Resolution of the DEM in meters")
-    p.add_argument("input_dir", type=str, help="Directory containing tiled GeoTIFF files")
-    p.add_argument("output_dir", type=str, help="Directory to save the merged GeoTIFF file")
+    p.add_argument("output_dir", type=str, help="Directory to save the DEM files and merged GeoTIFF")
     return p.parse_args()
 
 if __name__ == "__main__":
     '''Main block'''
 
-    # Start tracing memory allocations
-    tracemalloc.start()
-
-    # Read the command line arguments
     args = getCmdArgs()
     filename = args.filename
     resolution = args.resolution
-    input_dir = args.input_dir
     output_dir = args.output_dir
 
-    # Create an instance of the class with "onlyBounds" flag
-    b = plotLVIS(filename, onlyBounds=True)
-
-    # Print the bounds to check the range
-    print("Bounds of the data:", b.bounds)
+    # Use Pine Island Glacier bounds
+    x0, x1, y0, y1 = get_pine_island_bounds()
 
     # Define smaller chunks for more efficient processing
-    chunk_size_x = (b.bounds[2] - b.bounds[0]) / 20
-    chunk_size_y = (b.bounds[3] - b.bounds[1]) / 20
+    chunk_size_x = (x1 - x0) / 20
+    chunk_size_y = (y1 - y0) / 20
 
     # Loop over spatial subsets
-    for x0 in np.arange(b.bounds[0], b.bounds[2], chunk_size_x):
-        x1 = x0 + chunk_size_x
-        for y0 in np.arange(b.bounds[1], b.bounds[3], chunk_size_y):
-            y1 = y0 + chunk_size_y
+    for x_start in np.arange(x0, x1, chunk_size_x):
+        x_end = x_start + chunk_size_x
+        for y_start in np.arange(y0, y1, chunk_size_y):
+            y_end = y_start + chunk_size_y
 
             try:
-                lvis = plotLVIS(filename, minX=x0, minY=y0, maxX=x1, maxY=y1, setElev=True)
+                lvis = plotLVIS(filename, minX=x_start, minY=y_start, maxX=x_end, maxY=y_end, setElev=True)
 
                 if lvis.nWaves > 0:
-                    print(f"Data found in region: {x0}, {y0}, {x1}, {y1}")
+                    print(f"Data found in region: {x_start}, {y_start}, {x_end}, {y_end}")
                     lvis.setElevations()
                     lvis.estimateGround()
                     
@@ -131,11 +130,11 @@ if __name__ == "__main__":
                     lvis.reprojectLVIS(3031)
 
                     # Write DEM
-                    outName = f"{output_dir}/DEM_x_{x0}_y_{y0}.tif"
+                    outName = f"{output_dir}/DEM_x_{x_start}_y_{y_start}.tif"
                     lvis.writeDEM(resolution, outName)
                     print(f"DEM saved to {outName}")
             except AttributeError:
-                print(f"Tile skipped: {x0}, {y0}")
+                print(f"Tile skipped: {x_start}, {y_start}")
 
     # Merge all output files into a single file
     merged_output = f"{output_dir}/Merged.tif"
@@ -148,3 +147,5 @@ if __name__ == "__main__":
     print("[ Top 10 memory usage ]")
     for stat in top_stats[:10]:
         print(stat)
+
+    tracemalloc.stop()

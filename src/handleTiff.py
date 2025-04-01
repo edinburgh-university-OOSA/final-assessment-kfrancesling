@@ -32,7 +32,7 @@ class tiffHandle():
 
   ########################################
 
-  def writeTiff(self,data, x, y, res, filename="chm.tif",epsg=27700):
+  def writeTiff(self,data, x, y, res,filename="chm.tif",epsg=27700):
     '''
     Write a geotiff from a raster layer
     '''
