@@ -123,7 +123,7 @@ def get_bounds(lvis_object):
 
 def calculate_overlap(file_bounds, pig_bounds):
     """
-    function to calculate overlap area between file bounds and PIG bounds.
+    function to calculate overlap area between file bounds and PIG bounds to find the best file.
     
     arguments:
         file_bounds (tuple): min/max longitude and latitude of the file.
@@ -132,9 +132,9 @@ def calculate_overlap(file_bounds, pig_bounds):
     return:
         float: the overlapping area
     """
-    overlap_lon = max(0, min(file_bounds[2], pig_bounds[2]) - max(file_bounds[0], pig_bounds[0]))
-    overlap_lat = max(0, min(file_bounds[3], pig_bounds[3]) - max(file_bounds[1], pig_bounds[1]))
-    return overlap_lon * overlap_lat
+    overlap_lon = max(0, min(file_bounds[2], pig_bounds[2]) - max(file_bounds[0], pig_bounds[0])) # overlap in longitiude 
+    overlap_lat = max(0, min(file_bounds[3], pig_bounds[3]) - max(file_bounds[1], pig_bounds[1])) # overlap in latitude
+    return overlap_lon * overlap_lat # calculate the total area of overlap
 
 def process_pig_files(directory, resolution, output_dir):
     """
@@ -145,53 +145,57 @@ def process_pig_files(directory, resolution, output_dir):
         resolution (float): Resolution of the DEM.
         output_dir (str): Directory to save the GeoTIFF files.
     """
-    pig_bounds = (norm_lon(-102.0), -75.4, norm_lon(-99.0), -74.6)
+    pig_bounds = (norm_lon(-102.0), -75.4, norm_lon(-99.0), -74.6) # PIG bounds
     best_file = None
-    best_overlap = 0
+    best_overlap = 0 # preparing to track largest overlap with PIG
 
     tracemalloc.start()
 
+    # file iteration
     for filepath in glob(os.path.join(directory, "*.h5")):
         b = lvisGround(filepath, onlyBounds=True)
         file_bounds = get_bounds(b)
 
-        overlap = calculate_overlap(file_bounds, pig_bounds)
-        if overlap > best_overlap:
+        overlap = calculate_overlap(file_bounds, pig_bounds) # calculate geo overlap
+        if overlap > best_overlap: 
             best_file = filepath
             best_overlap = overlap
 
+    # process best file
     if best_file:
         print("Best file selected:", best_file)
         b = lvisGround(best_file, onlyBounds=True)
-        b_min_lon, b_min_lat, b_max_lon, b_max_lat = get_bounds(b)
+        b_min_lon, b_min_lat, b_max_lon, b_max_lat = get_bounds(b) # retrive bounds 
 
-        chunk_size_x = (b_max_lon - b_min_lon) / 3
-        chunk_size_y = (b_max_lat - b_min_lat) / 3
+        # divide file into chunks for processing (based on range)
+        chunk_size_x = (b_max_lon - b_min_lon) / 20
+        chunk_size_y = (b_max_lat - b_min_lat) / 20 
 
+    # process each chunk
         for x0 in np.arange(b_min_lon, b_max_lon, chunk_size_x):
-            x1 = x0 + chunk_size_x
+            x1 = x0 + chunk_size_x # loop over long chunks
             for y0 in np.arange(b_min_lat, b_max_lat, chunk_size_y):
-                y1 = y0 + chunk_size_y
-
+                y1 = y0 + chunk_size_y # loop over lat chunks 
+                # initialise lvis for chunk
                 lvis = lvisGround(best_file, minX=x0, minY=y0, maxX=x1, maxY=y1, setElev=True)
-
+                # check for data within chunk 
                 if lvis.nWaves > 0:
                     lvis.setElevations()
                     lvis.estimateGround()
-                    
+                    # reproject coords to sys for antartica 
                     transformer = Transformer.from_crs("epsg:4326", "epsg:3031", always_xy=True)
                     lvis.x, lvis.y = transformer.transform(lvis.lon, lvis.lat)
-
+                    # write tiff
                     outName = f"{output_dir}/DEM_x_{x0}_y_{y0}.tif"
                     writeDEM(lvis, resolution, outName)
-
+        # memory usage reporting - reporting most used lines 
         snapshot = tracemalloc.take_snapshot()
         top_stats = snapshot.statistics('lineno')
 
         print("[ Top 10 memory usage ]")
         for stat in top_stats[:10]:
             print(stat)
-
+        # merge the geotiffs
         merged_output = f"{output_dir}/Merged.tif"
         merge_tifs(output_dir, merged_output)
 
